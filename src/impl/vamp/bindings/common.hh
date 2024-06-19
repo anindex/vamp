@@ -147,6 +147,15 @@ namespace vamp::binding
                 configuration_v, configuration_v, EnvironmentVector(environment));
         }
 
+        inline static auto
+        validate_motion(const ConfigurationArray &a, const ConfigurationArray &b, const EnvironmentInput &environment) -> bool
+        {
+            const Configuration configuration_va(a);
+            const Configuration configuration_vb(b);
+            return vamp::planning::validate_motion<Robot, rake, 1>(
+                configuration_va, configuration_vb, EnvironmentVector(environment));
+        }
+
         inline static auto rrtc_single(
             const ConfigurationArray &start,
             const ConfigurationArray &goal,
@@ -480,6 +489,14 @@ namespace vamp::binding
             "configuration"_a,
             "environment"_a = vamp::collision::Environment<float>(),
             "Check if a configuration is valid. Returns true if valid.");
+        
+        submodule.def(
+            "validate_motion",
+            RH::validate_motion,
+            "a"_a,
+            "b"_a,
+            "environment"_a = vamp::collision::Environment<float>(),
+            "Check if between configuration is valid. Returns true if valid.");
 
         submodule.def(
             "sphere_validity",
