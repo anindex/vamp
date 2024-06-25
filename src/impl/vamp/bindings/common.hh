@@ -151,7 +151,7 @@ namespace vamp::binding
         {
             const Configuration configuration_va(a);
             const Configuration configuration_vb(b);
-            return vamp::planning::validate_motion<Robot, rake, 1>(
+            return vamp::planning::validate_motion<Robot, rake, 2>(
                 configuration_va, configuration_vb, EnvironmentVector(environment));
         }
 
