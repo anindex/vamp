@@ -118,8 +118,8 @@ namespace vamp::binding
         }
 #endif
 
-        inline static auto
-        fk(const ConfigurationArray &configuration) -> std::vector<vamp::collision::Sphere<float>>
+        inline static auto fk(const ConfigurationArray &configuration)
+            -> std::vector<vamp::collision::Sphere<float>>
         {
             typename Robot::template Spheres<1> out;
             typename Robot::template ConfigurationBlock<1> block;
@@ -140,9 +140,9 @@ namespace vamp::binding
             return result;
         }
 
-        inline static auto sphere_validate(
-            const ConfigurationArray &configuration,
-            const EnvironmentInput &environment) -> std::vector<std::vector<std::string>>
+        inline static auto
+        sphere_validate(const ConfigurationArray &configuration, const EnvironmentInput &environment)
+            -> std::vector<std::vector<std::string>>
         {
             auto spheres = fk(configuration);
             std::vector<std::vector<std::string>> result;
@@ -158,9 +158,9 @@ namespace vamp::binding
             return result;
         }
 
-        inline static auto validate_configuration(
-            const Configuration &configuration,
-            const EnvironmentInput &environment) -> bool
+        inline static auto
+        validate_configuration(const Configuration &configuration, const EnvironmentInput &environment)
+            -> bool
         {
             return vamp::planning::validate_motion<Robot, rake, 1>(
                 configuration, configuration, EnvironmentVector(environment));
@@ -174,8 +174,10 @@ namespace vamp::binding
                 configuration_v, configuration_v, EnvironmentVector(environment));
         }
 
-        inline static auto
-        validate_motion(const ConfigurationArray &a, const ConfigurationArray &b, const EnvironmentInput &environment) -> bool
+        inline static auto validate_motion(
+            const ConfigurationArray &a,
+            const ConfigurationArray &b,
+            const EnvironmentInput &environment) -> bool
         {
             const Configuration configuration_va(a);
             const Configuration configuration_vb(b);
@@ -304,8 +306,8 @@ namespace vamp::binding
             return filter_robot_from_pointcloud<Robot>(pc, start, environment, point_radius);
         }
 
-        inline static auto
-        eefk(const ConfigurationArray &start) -> std::pair<std::array<float, 3>, std::array<float, 4>>
+        inline static auto eefk(const ConfigurationArray &start)
+            -> std::pair<std::array<float, 3>, std::array<float, 4>>
         {
             const auto &result = Robot::eefk(start);
 
@@ -620,7 +622,7 @@ namespace vamp::binding
             "configuration"_a,
             "environment"_a = vamp::collision::Environment<float>(),
             "Check if a configuration is valid. Returns true if valid.");
-        
+
         submodule.def(
             "validate_motion",
             RH::validate_motion,
@@ -656,6 +658,110 @@ namespace vamp::binding
             RH::eefk,
             "configuration"_a,
             "Returns the position and orientation (as a xyzw quaternion) of the robot's end-effector.");
+
+        submodule.def(
+            "batch_validate",
+            [](const nb::ndarray<const FloatT, nb::shape<Robot::dimension>, nb::device::cpu> &start_config,
+               const nb::ndarray<const FloatT, nb::shape<-1, -1, -1, Robot::dimension>, nb::device::cpu>
+                   &batch_layers,
+               const nb::ndarray<const FloatT, nb::shape<-1, Robot::dimension>, nb::device::cpu>
+                   &goal_configs,
+               const typename RH::EnvironmentInput &env) noexcept
+            {
+                using Configuration = typename RH::Configuration;
+
+                const typename RH::EnvironmentVector env_v(env);
+
+                const std::size_t batch_size = batch_layers.shape(0);
+                const std::size_t num_layers = batch_layers.shape(1);
+                const std::size_t num_points = batch_layers.shape(2);
+                const std::size_t num_goals = goal_configs.shape(0);
+
+                const auto bl_view = batch_layers.view();
+                const auto gc_view = goal_configs.view();
+
+                const std::size_t cs_size = batch_size * num_points;
+                const std::size_t cl_size = batch_size * (num_layers - 1) * num_points * num_points;
+                const std::size_t cg_size = batch_size * num_points * num_goals;
+
+                auto *cs = new bool[cs_size];
+                auto *cl = new bool[cl_size];
+                auto *cg = new bool[cg_size];
+
+                const float *c_s = start_config.data();
+                Configuration c_s_v(c_s, false);
+
+                for (auto i = 0U; i < num_points; ++i)
+                {
+                    for (auto b = 0U; b < batch_size; ++b)
+                    {
+                        const float *c_b = &bl_view(b, 0, i, 0);
+                        Configuration c_b_v(c_b, false);
+
+                        cs[b * num_points + i] =
+                            vamp::planning::validate_motion<Robot, rake, Robot::resolution>(
+                                c_s_v, c_b_v, env_v);
+                    }
+                }
+
+                for (auto l = 0U; l < num_layers - 1; ++l)
+                {
+                    for (auto b = 0U; b < batch_size; ++b)
+                    {
+                        for (auto i = 0U; i < num_points; ++i)
+                        {
+                            const float *c_a = &bl_view(b, l, i, 0);
+                            Configuration c_a_v(c_a, false);
+
+                            for (auto j = 0U; j < num_points; ++j)
+                            {
+                                const float *c_b = &bl_view(b, l + 1, j, 0);
+                                Configuration c_b_v(c_b, false);
+
+                                const bool valid =
+                                    vamp::planning::validate_motion<Robot, rake, Robot::resolution>(
+                                        c_a_v, c_b_v, env_v);
+
+                                const std::size_t index = b * ((num_layers - 1) * num_points * num_points) +
+                                                          l * (num_points * num_points) + i * num_points + j;
+                                cl[index] = valid;
+                            }
+                        }
+                    }
+                }
+
+                for (auto b = 0U; b < batch_size; ++b)
+                {
+                    for (auto i = 0U; i < num_points; ++i)
+                    {
+                        const float *c_a = &bl_view(b, num_layers - 1, i, 0);
+                        Configuration c_a_v(c_a, false);
+
+                        for (auto g = 0U; g < num_goals; ++g)
+                        {
+                            const float *c_g = &gc_view(g, 0);
+                            Configuration c_g_v(c_g, false);
+
+                            const bool valid =
+                                vamp::planning::validate_motion<Robot, rake, Robot::resolution>(
+                                    c_a_v, c_g_v, env_v);
+
+                            const std::size_t index = b * (num_goals * num_points) + i * num_goals + g;
+
+                            cg[index] = valid;
+                        }
+                    }
+                }
+
+                nb::capsule cs_owner(cs, [](void *p) noexcept { delete[] (bool *)p; });
+                nb::capsule cl_owner(cl, [](void *p) noexcept { delete[] (bool *)p; });
+                nb::capsule cg_owner(cg, [](void *p) noexcept { delete[] (bool *)p; });
+
+                return std::make_tuple(
+                    nb::ndarray<nb::numpy, bool, nb::ndim<1>>(cs, {cs_size}, cs_owner),
+                    nb::ndarray<nb::numpy, bool, nb::ndim<1>>(cl, {cl_size}, cl_owner),
+                    nb::ndarray<nb::numpy, bool, nb::ndim<1>>(cg, {cg_size}, cg_owner));
+            });
 
         return submodule;
     }

@@ -718,10 +718,14 @@ namespace vamp
             return S::template constant<0>(s);
         }
 
-        template <bool is_aligned = true>
         inline constexpr void pack(const typename S::ScalarT *const scalar_data) noexcept
         {
-            load_vector<is_aligned>(scalar_data, std::make_index_sequence<num_vectors>());
+            load_vector(scalar_data, std::make_index_sequence<num_vectors>());
+        }
+
+        inline constexpr void pack_unaligned(const typename S::ScalarT *const scalar_data) noexcept
+        {
+            load_vector_unaligned(scalar_data, std::make_index_sequence<num_vectors>());
         }
 
         template <auto fn, std::size_t stride = 1, std::size_t... I>
@@ -738,21 +742,20 @@ namespace vamp
             (..., fn(base + I * stride, std::get<I>(data)));
         }
 
-        template <bool is_aligned, std::size_t... I>
+        template <std::size_t... I>
         inline constexpr void
         load_vector(const typename S::ScalarT *const scalar_array, std::index_sequence<I...>) noexcept
         {
-            // TODO: This might segfault if we had to over-allocate vectors and the scalar data isn't
-            // full for the over-allocated size
-            if constexpr (is_aligned)
-            {
-                (..., (std::get<I>(d()->data) = S::template load<0>(scalar_array + I * S::VectorWidth)));
-            }
-            else
-            {
-                (...,
-                 (std::get<I>(d()->data) = S::template load_unaligned<0>(scalar_array + I * S::VectorWidth)));
-            }
+            (..., (std::get<I>(d()->data) = S::template load<0>(scalar_array + I * S::VectorWidth)));
+        }
+
+        template <std::size_t... I>
+        inline constexpr void load_vector_unaligned(
+            const typename S::ScalarT *const scalar_array,
+            std::index_sequence<I...>) noexcept
+        {
+            (...,
+             (std::get<I>(d()->data) = S::template load_unaligned<0>(scalar_array + I * S::VectorWidth)));
         }
 
         template <std::size_t... I>
@@ -834,7 +837,7 @@ namespace vamp
             }
             else
             {
-                Interface::pack<false>(scalar_data);
+                Interface::pack_unaligned(scalar_data);
             }
         }
 
