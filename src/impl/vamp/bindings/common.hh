@@ -668,8 +668,7 @@ namespace vamp::binding
                const typename RH::EnvironmentInput &env) noexcept
             {
                 using Configuration = typename RH::Configuration;
-                static constexpr auto validate =
-                    vamp::planning::validate_motion<Robot, rake, Robot::resolution>;
+                static constexpr auto validate = vamp::planning::validate_motion<Robot, rake, 1>;
 
                 const typename RH::EnvironmentVector env_v(env);
 
@@ -747,29 +746,32 @@ namespace vamp::binding
     shared(cs_view, cl_view, cg_view) default(none)
                 {
 #pragma omp for collapse(2) schedule(dynamic, 1000) nowait
-                    for (auto i = 0U; i < num_points; ++i)
+                    for (auto b = 0U; b < batch_size; ++b)
                     {
-                        for (auto b = 0U; b < batch_size; ++b)
+                        for (auto i = 0U; i < num_points; ++i)
                         {
                             const Configuration c_b_v(&bl_view(b, 0, i, 0), false);
                             cs_view(b, 0, i) = validate(c_s_v, c_b_v, env_v);
                         }
                     }
 
-#pragma omp for collapse(4) schedule(dynamic, 1000) nowait
-                    for (auto l = 0U; l < num_layers - 1; ++l)
+                    if (num_layers > 1)
                     {
+#pragma omp for collapse(4) schedule(dynamic, 1000) nowait
                         for (auto b = 0U; b < batch_size; ++b)
                         {
-                            for (auto i = 0U; i < num_points; ++i)
+                            for (auto l = 0U; l < num_layers - 1; ++l)
                             {
-                                const Configuration c_a_v(&bl_view(b, l, i, 0), false);
-
-                                for (auto j = 0U; j < num_points; ++j)
+                                for (auto i = 0U; i < num_points; ++i)
                                 {
-                                    const Configuration c_b_v(&bl_view(b, l + 1, j, 0), false);
+                                    const Configuration c_a_v(&bl_view(b, l, i, 0), false);
 
-                                    cl_view(b, l, i, j) = validate(c_a_v, c_b_v, env_v);
+                                    for (auto j = 0U; j < num_points; ++j)
+                                    {
+                                        const Configuration c_b_v(&bl_view(b, l + 1, j, 0), false);
+
+                                        cl_view(b, l, i, j) = validate(c_a_v, c_b_v, env_v);
+                                    }
                                 }
                             }
                         }
