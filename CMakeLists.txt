@@ -33,7 +33,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
+# set(CMAKE_TRY_COMPILE_TARGET_TYPE STATIC_LIBRARY)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH ON)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -70,10 +70,8 @@ list(APPEND VAMP_EXT_INCLUDES
 )
 
 nanobind_add_module(_core_ext
-    NB_STATIC
-    STABLE_ABI
-    NOMINSIZE
-    ${VAMP_EXT_SOURCES}
+  ${VAMP_EXT_SOURCES}
+  NOMINSIZE
 )
 
 target_include_directories(_core_ext
@@ -82,8 +80,8 @@ target_include_directories(_core_ext
 )
 
 target_link_libraries(_core_ext
-    PRIVATE
-    Eigen3::Eigen
+  PRIVATE Eigen3::Eigen
+  PRIVATE OpenMP::OpenMP_CXX
 )
 
 if($ENV{GITHUB_ACTIONS})

@@ -18,3 +18,5 @@ if(CMAKE_SYSTEM_PROCESSOR STREQUAL "x86_64")
     ${SIMDxorshift_SOURCE_DIR}/src/xorshift128plus.c)
   list(APPEND VAMP_EXT_INCLUDES ${SIMDxorshift_SOURCE_DIR}/include)
 endif()
+
+find_package(OpenMP REQUIRED)
