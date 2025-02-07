@@ -742,9 +742,11 @@ namespace vamp::binding
 
                 const Configuration c_s_v(start_config.data(), false);
 
-#pragma omp parallel firstprivate(bl_view, gc_view) shared(cs_view, cl_view, cg_view)
+#pragma omp parallel firstprivate(                                                                           \
+        c_s_v, bl_view, gc_view, num_points, num_layers, batch_size, num_goals, env_v)                       \
+    shared(cs_view, cl_view, cg_view) default(none)
                 {
-#pragma omp for collapse(2) schedule(static)
+#pragma omp for collapse(2) schedule(dynamic, 1000) nowait
                     for (auto i = 0U; i < num_points; ++i)
                     {
                         for (auto b = 0U; b < batch_size; ++b)
@@ -754,7 +756,7 @@ namespace vamp::binding
                         }
                     }
 
-#pragma omp for collapse(4) schedule(static)
+#pragma omp for collapse(4) schedule(dynamic, 1000) nowait
                     for (auto l = 0U; l < num_layers - 1; ++l)
                     {
                         for (auto b = 0U; b < batch_size; ++b)
@@ -773,7 +775,7 @@ namespace vamp::binding
                         }
                     }
 
-#pragma omp for collapse(3) schedule(static)
+#pragma omp for collapse(3) schedule(dynamic, 1000) nowait
                     for (auto b = 0U; b < batch_size; ++b)
                     {
                         for (auto i = 0U; i < num_points; ++i)

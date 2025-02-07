@@ -894,7 +894,7 @@ namespace vamp
                 }
                 else
                 {
-                    Interface::pack(scalar_data.data());
+                    Interface::pack_unaligned(scalar_data.data());
                 }
             }
         }
