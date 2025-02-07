@@ -660,6 +660,40 @@ namespace vamp::binding
             "Returns the position and orientation (as a xyzw quaternion) of the robot's end-effector.");
 
         submodule.def(
+            "batch_sample",
+            [](std::size_t batch_size,
+               std::size_t num_layers,
+               std::size_t num_dreams,
+               typename RH::RNG::Ptr rng,
+               const typename RH::EnvironmentInput &env) noexcept
+            {
+                using Configuration = typename RH::Configuration;
+                static constexpr auto validate =
+                    vamp::planning::validate_motion<Robot, rake, Robot::resolution>;
+
+                const typename RH::EnvironmentVector env_v(env);
+
+                auto *configs = new float[batch_size * num_layers * num_dreams * Robot::dimension];
+                nb::capsule owner(configs, [](void *p) noexcept { delete[] (float *)p; });
+                nb::ndarray<nb::numpy, float, nb::ndim<4>> config_nd(
+                    configs, {batch_size, num_layers, num_dreams, Robot::dimension}, owner);
+
+                for (auto i = 0U; i < batch_size * num_layers * num_dreams; ++i)
+                {
+                    Configuration config;
+                    do
+                    {
+                        config = rng->next();
+                        Robot::scale_configuration(config);
+                    } while (not validate(config, config, env_v));
+
+                    config.to_array_unaligned(&configs[i * Robot::dimension]);
+                }
+
+                return config_nd;
+            });
+
+        submodule.def(
             "batch_validate",
             [](const nb::ndarray<const FloatT, nb::shape<Robot::dimension>, nb::device::cpu> &start_config,
                const nb::ndarray<const FloatT, nb::shape<-1, -1, -1, Robot::dimension>, nb::device::cpu>
@@ -669,6 +703,9 @@ namespace vamp::binding
                const typename RH::EnvironmentInput &env) noexcept
             {
                 using Configuration = typename RH::Configuration;
+                static constexpr auto validate =
+                    // vamp::planning::validate_motion<Robot, rake, Robot::resolution>;
+                    vamp::planning::validate_motion<Robot, rake, 2>;
 
                 const typename RH::EnvironmentVector env_v(env);
 
@@ -681,26 +718,36 @@ namespace vamp::binding
                 const auto gc_view = goal_configs.view();
 
                 const std::size_t cs_size = batch_size * num_points;
-                const std::size_t cl_size = batch_size * (num_layers - 1) * num_points * num_points;
+                const std::size_t cl_size =
+                    std::max(batch_size * (num_layers - 1) * num_points * num_points, 1UL);
                 const std::size_t cg_size = batch_size * num_points * num_goals;
 
                 auto *cs = new bool[cs_size];
                 auto *cl = new bool[cl_size];
                 auto *cg = new bool[cg_size];
 
-                const float *c_s = start_config.data();
-                Configuration c_s_v(c_s, false);
+                nb::capsule cs_owner(cs, [](void *p) noexcept { delete[] (bool *)p; });
+                nb::capsule cl_owner(cl, [](void *p) noexcept { delete[] (bool *)p; });
+                nb::capsule cg_owner(cg, [](void *p) noexcept { delete[] (bool *)p; });
+
+                nb::ndarray<nb::numpy, bool, nb::ndim<3>> cs_nd(cs, {batch_size, 1, num_points}, cs_owner);
+                nb::ndarray<nb::numpy, bool, nb::ndim<4>> cl_nd(
+                    cl, {batch_size, num_layers - 1, num_points, num_points}, cl_owner);
+                nb::ndarray<nb::numpy, bool, nb::ndim<3>> cg_nd(
+                    cg, {batch_size, num_points, num_goals}, cg_owner);
+
+                const auto cs_view = cs_nd.view();
+                const auto cl_view = cl_nd.view();
+                const auto cg_view = cg_nd.view();
+
+                const Configuration c_s_v(start_config.data(), false);
 
                 for (auto i = 0U; i < num_points; ++i)
                 {
                     for (auto b = 0U; b < batch_size; ++b)
                     {
-                        const float *c_b = &bl_view(b, 0, i, 0);
-                        Configuration c_b_v(c_b, false);
-
-                        cs[b * num_points + i] =
-                            vamp::planning::validate_motion<Robot, rake, Robot::resolution>(
-                                c_s_v, c_b_v, env_v);
+                        const Configuration c_b_v(&bl_view(b, 0, i, 0), false);
+                        cs_view(b, 0, i) = validate(c_s_v, c_b_v, env_v);
                     }
                 }
 
@@ -710,21 +757,13 @@ namespace vamp::binding
                     {
                         for (auto i = 0U; i < num_points; ++i)
                         {
-                            const float *c_a = &bl_view(b, l, i, 0);
-                            Configuration c_a_v(c_a, false);
+                            const Configuration c_a_v(&bl_view(b, l, i, 0), false);
 
                             for (auto j = 0U; j < num_points; ++j)
                             {
-                                const float *c_b = &bl_view(b, l + 1, j, 0);
-                                Configuration c_b_v(c_b, false);
+                                const Configuration c_b_v(&bl_view(b, l + 1, j, 0), false);
 
-                                const bool valid =
-                                    vamp::planning::validate_motion<Robot, rake, Robot::resolution>(
-                                        c_a_v, c_b_v, env_v);
-
-                                const std::size_t index = b * ((num_layers - 1) * num_points * num_points) +
-                                                          l * (num_points * num_points) + i * num_points + j;
-                                cl[index] = valid;
+                                cl_view(b, l, i, j) = validate(c_a_v, c_b_v, env_v);
                             }
                         }
                     }
@@ -734,33 +773,17 @@ namespace vamp::binding
                 {
                     for (auto i = 0U; i < num_points; ++i)
                     {
-                        const float *c_a = &bl_view(b, num_layers - 1, i, 0);
-                        Configuration c_a_v(c_a, false);
+                        const Configuration c_a_v(&bl_view(b, num_layers - 1, i, 0), false);
 
                         for (auto g = 0U; g < num_goals; ++g)
                         {
-                            const float *c_g = &gc_view(g, 0);
-                            Configuration c_g_v(c_g, false);
-
-                            const bool valid =
-                                vamp::planning::validate_motion<Robot, rake, Robot::resolution>(
-                                    c_a_v, c_g_v, env_v);
-
-                            const std::size_t index = b * (num_goals * num_points) + i * num_goals + g;
-
-                            cg[index] = valid;
+                            const Configuration c_g_v(&gc_view(g, 0), false);
+                            cg_view(b, i, g) = validate(c_a_v, c_g_v, env_v);
                         }
                     }
                 }
 
-                nb::capsule cs_owner(cs, [](void *p) noexcept { delete[] (bool *)p; });
-                nb::capsule cl_owner(cl, [](void *p) noexcept { delete[] (bool *)p; });
-                nb::capsule cg_owner(cg, [](void *p) noexcept { delete[] (bool *)p; });
-
-                return std::make_tuple(
-                    nb::ndarray<nb::numpy, bool, nb::ndim<1>>(cs, {cs_size}, cs_owner),
-                    nb::ndarray<nb::numpy, bool, nb::ndim<1>>(cl, {cl_size}, cl_owner),
-                    nb::ndarray<nb::numpy, bool, nb::ndim<1>>(cg, {cg_size}, cg_owner));
+                return std::make_tuple(cs_nd, cl_nd, cg_nd);
             });
 
         return submodule;
