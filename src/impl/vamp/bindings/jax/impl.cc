@@ -2,47 +2,45 @@
 #include <cstdint>
 #include <utility>
 
-#include <vamp/bindings/jax/jax.hh>
-
 #include <nanobind/nanobind.h>
 #include <xla/ffi/api/c_api.h>
 #include <xla/ffi/api/ffi.h>
 
+#include <vamp/bindings/jax/jax.hh>
+
+#include <vamp/robots/panda.hh>
+#include <vamp/collision/validity.hh>
+#include <vamp/planning/validate.hh>
+
 namespace nb = nanobind;
 namespace ffi = xla::ffi;
 
-// auto validate_motion_pairwise(const float *a, std::size_t an, const float *b, std::size_t bn, bool *result)
-//     -> bool
-// {
-//     return false;
-// }
+using Robot = vamp::robots::Panda;
+static constexpr auto rake = 8;
+using EnvironmentVector = vamp::collision::Environment<vamp::FloatVector<rake>>;
 
-template <ffi::DataType T>
-std::pair<int64_t, int64_t> GetDims(const ffi::Buffer<T> &buffer)
-{
-    auto dims = buffer.dimensions();
-    if (dims.size() == 0)
-    {
-        return std::make_pair(0, 0);
-    }
-    return std::make_pair(buffer.element_count(), dims.back());
-}
-
-auto validate_motion_pairwise_impl(
+inline auto validate_motion_pairwise_impl(
     ffi::Buffer<ffi::F32> a,
     ffi::Buffer<ffi::F32> b,
-    ffi::ResultBuffer<ffi::F32> r) -> ffi::Error
+    ffi::ResultBuffer<ffi::PRED> r) noexcept -> ffi::Error
 {
-    auto a_d = a.dimensions();
-    for (auto i = 0U; i < a_d.size(); ++i)
-    {
-        std::cout << a_d[i] << std::endl;
-    }
+    const auto a_d = a.dimensions();
+    const auto b_d = b.dimensions();
 
-    auto b_d = b.dimensions();
-    for (auto i = 0U; i < b_d.size(); ++i)
+    const auto *a_data = a.typed_data();
+    const auto *b_data = b.typed_data();
+    auto *r_data = r->typed_data();
+
+    EnvironmentVector env;
+
+    for (auto i = 0U; i < a_d[0]; ++i)
     {
-        std::cout << b_d[i] << std::endl;
+        Robot::Configuration a_c(&a_data[i * 7], false);
+        for (auto j = 0U; j < b_d[0]; ++j)
+        {
+            Robot::Configuration b_c(&b_data[j * 7], false);
+            r_data[i * a_d[0] + j] = vamp::planning::validate_motion<Robot, rake, 2>(a_c, b_c, env);
+        }
     }
 
     // auto [totalSize, lastDim] = GetDims(a);
@@ -54,6 +52,7 @@ auto validate_motion_pairwise_impl(
     // {
     //     ComputeValidate(eps, lastDim, &(x.typed_data()[n]), &(y->typed_data()[n]));
     // }
+
     return ffi::Error::Success();
 }
 
@@ -61,9 +60,9 @@ XLA_FFI_DEFINE_HANDLER_SYMBOL(
     validate_motion_pairwise,
     validate_motion_pairwise_impl,
     ffi::Ffi::Bind()
-        .Arg<ffi::Buffer<ffi::F32>>()  // config buffer a
-        .Arg<ffi::Buffer<ffi::F32>>()  // config buffer b
-        .Ret<ffi::Buffer<ffi::F32>>()  // pairwise validity
+        .Arg<ffi::Buffer<ffi::F32>>()   // config buffer a
+        .Arg<ffi::Buffer<ffi::F32>>()   // config buffer b
+        .Ret<ffi::Buffer<ffi::PRED>>()  // pairwise validity
 );
 
 template <typename T>

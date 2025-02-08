@@ -13,11 +13,7 @@ for name, target in vamp.jax.registrations().items():
 
 
 def validate_motion_pairwise(a, b):
-    print(a.shape)
-    print(b.shape)
-
-    out_type = jax.ShapeDtypeStruct(a.shape, b.dtype)
-
+    out_type = jax.ShapeDtypeStruct((a.shape[0], b.shape[0]), jnp.bool_)
     call = jax.ffi.ffi_call(
         "validate_motion_pairwise",
         out_type,
@@ -27,7 +23,7 @@ def validate_motion_pairwise(a, b):
     return call(a, b)
 
 
-def main(n = 10000):
+def main(n = 10):
     jax.config.update('jax_platform_name', 'cpu')
 
     halton = vamp.panda.halton()
@@ -37,7 +33,8 @@ def main(n = 10000):
     jca = jnp.array(config_a)
     jcb = jnp.array(config_b)
 
-    validate_motion_pairwise(jca, jcb)
+    result = validate_motion_pairwise(jca, jcb)
+    print(result)
 
 if __name__ == "__main__":
     Fire(main)
