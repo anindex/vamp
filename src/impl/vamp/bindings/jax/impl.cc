@@ -2,6 +2,8 @@
 #include <cstdint>
 #include <utility>
 
+#include <vamp/bindings/jax/jax.hh>
+
 #include <nanobind/nanobind.h>
 #include <xla/ffi/api/c_api.h>
 #include <xla/ffi/api/ffi.h>
@@ -9,11 +11,11 @@
 namespace nb = nanobind;
 namespace ffi = xla::ffi;
 
-auto validate_motion_pairwise(const float *a, std::size_t an, const float *b, std::size_t bn, bool *result)
-    -> bool
-{
-    return false;
-}
+// auto validate_motion_pairwise(const float *a, std::size_t an, const float *b, std::size_t bn, bool *result)
+//     -> bool
+// {
+//     return false;
+// }
 
 template <ffi::DataType T>
 std::pair<int64_t, int64_t> GetDims(const ffi::Buffer<T> &buffer)
@@ -73,16 +75,16 @@ nb::capsule EncapsulateFfiHandler(T *fn)
     return nb::capsule(reinterpret_cast<void *>(fn));
 }
 
-NB_MODULE(_jax_ext, pymodule)
+void vamp::binding::init_jax(nanobind::module_ &pymodule)
 {
-    pymodule.def(
+    auto submodule = pymodule.def_submodule("jax", "JAX Extensions");
+
+    submodule.def(
         "registrations",
         []()
         {
             nb::dict registrations;
-            registrations["validate_motion_pairwise"] = EncapsulateFfiHandler(Validate);
+            registrations["validate_motion_pairwise"] = EncapsulateFfiHandler(validate_motion_pairwise);
             return registrations;
         });
-
-    pymodule.def()
 }

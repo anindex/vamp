@@ -66,6 +66,11 @@ foreach(robot_name IN LISTS VAMP_ROBOT_MODULES)
   list(APPEND VAMP_EXT_SOURCES "src/impl/vamp/bindings/${robot_name}.cc")
 endforeach()
 
+if(VAMP_BUILD_JAX)
+  list(APPEND VAMP_EXT_SOURCES "src/impl/vamp/bindings/jax/impl.cc")
+  add_definitions(-DVAMP_BUILD_JAX)
+endif()
+
 list(APPEND VAMP_EXT_INCLUDES
   ${NIGH_INCLUDE_DIRS}
   ${PDQSORT_INCLUDE_DIRS}
@@ -81,6 +86,10 @@ target_include_directories(_core_ext
     SYSTEM PRIVATE
     ${VAMP_EXT_INCLUDES}
 )
+
+if(VAMP_BUILD_JAX)
+  target_include_directories(_core_ext PRIVATE ${XLA_DIR})
+endif()
 
 target_link_libraries(_core_ext
   PRIVATE Eigen3::Eigen
@@ -141,15 +150,4 @@ if(VAMP_BUILD_OMPL_DEMO)
   else()
     message(WARNING "OMPL not found! Cannot build OMPL demo.")
   endif()
-endif()
-
-if(VAMP_BUILD_JAX)
-  nanobind_add_module(_jax_ext NB_STATIC src/impl/vamp/jax/impl.cc)
-  target_include_directories(_jax_ext PUBLIC ${XLA_DIR} ${VAMP_EXT_INCLUDES})
-  target_link_libraries(_jax_ext
-    PRIVATE
-    Eigen3::Eigen
-  )
-
-  install(TARGETS _jax_ext LIBRARY DESTINATION vamp/_jax)
 endif()
