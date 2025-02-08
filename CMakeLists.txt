@@ -4,6 +4,9 @@ option(VAMP_LTO "Use LTO." ON)
 option(VAMP_FORCE_COLORED_OUTPUT "Always produce ANSI-colored output." ON)
 option(VAMP_FORCE_CLANG "Force the use of Clang." OFF)
 
+option(VAMP_BUILD_JAX "Build JAX Extensions." OFF)
+option(XLA_DIR "JAX FFI Directory" "")
+
 option(VAMP_BUILD_OMPL_DEMO "Build VAMP C++ OMPL Integration Demo Script" OFF)
 option(VAMP_OMPL_PATH "Search Path for OMPL Installation - Only Needed for Demo Script" "")
 
@@ -138,4 +141,15 @@ if(VAMP_BUILD_OMPL_DEMO)
   else()
     message(WARNING "OMPL not found! Cannot build OMPL demo.")
   endif()
+endif()
+
+if(VAMP_BUILD_JAX)
+  nanobind_add_module(_jax_ext NB_STATIC src/impl/vamp/jax/impl.cc)
+  target_include_directories(_jax_ext PUBLIC ${XLA_DIR} ${VAMP_EXT_INCLUDES})
+  target_link_libraries(_jax_ext
+    PRIVATE
+    Eigen3::Eigen
+  )
+
+  install(TARGETS _jax_ext LIBRARY DESTINATION vamp/_jax)
 endif()

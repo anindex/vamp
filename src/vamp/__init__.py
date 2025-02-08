@@ -51,6 +51,8 @@ from ._core import sphere as sphere
 from ._core import ur5 as ur5
 from ._core import filter_pointcloud as filter_pointcloud
 
+from . import _jax
+
 AnyPlanningResult = Union[
     sphere.PlanningResult,
     ur5.PlanningResult,
