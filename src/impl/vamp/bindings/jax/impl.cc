@@ -35,7 +35,7 @@ inline auto validate_motion_pairwise_impl(
         for (auto j = 0U; j < b_d[0]; ++j)
         {
             Robot::Configuration b_c(&b_data[j * 7], false);
-            r_data[i * a_d[0] + j] = vamp::planning::validate_motion<Robot, rake, 2>(a_c, b_c, env);
+            r_data[i * b_d[0] + j] = vamp::planning::validate_motion<Robot, rake, 2>(a_c, b_c, env);
         }
     }
 

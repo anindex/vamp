@@ -23,18 +23,17 @@ def validate_motion_pairwise(a, b):
     return call(a, b)
 
 
-def main(n = 10):
+def main(n = 10, m = 10):
     jax.config.update('jax_platform_name', 'cpu')
 
     halton = vamp.panda.halton()
-    config_a = np.vstack([halton.next().numpy() for i in range(n)])
-    config_b = np.vstack([halton.next().numpy() for i in range(n)])
+    config_a = np.vstack([halton.next().numpy() for _ in range(n)])
+    config_b = np.vstack([halton.next().numpy() for _ in range(m)])
 
     jca = jnp.array(config_a)
     jcb = jnp.array(config_b)
 
-    result = validate_motion_pairwise(jca, jcb)
-    print(result)
+    print(validate_motion_pairwise(jca, jcb))
 
 if __name__ == "__main__":
     Fire(main)
