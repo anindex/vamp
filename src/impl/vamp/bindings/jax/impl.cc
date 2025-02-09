@@ -1,7 +1,3 @@
-#include <cmath>
-#include <cstdint>
-#include <utility>
-
 #include <nanobind/nanobind.h>
 #include <xla/ffi/api/c_api.h>
 #include <xla/ffi/api/ffi.h>
@@ -42,16 +38,6 @@ inline auto validate_motion_pairwise_impl(
             r_data[i * a_d[0] + j] = vamp::planning::validate_motion<Robot, rake, 2>(a_c, b_c, env);
         }
     }
-
-    // auto [totalSize, lastDim] = GetDims(a);
-    // if (lastDim == 0)
-    // {
-    //     return ffi::Error::InvalidArgument("Validate input must be an array");
-    // }
-    // for (int64_t n = 0; n < totalSize; n += lastDim)
-    // {
-    //     ComputeValidate(eps, lastDim, &(x.typed_data()[n]), &(y->typed_data()[n]));
-    // }
 
     return ffi::Error::Success();
 }
