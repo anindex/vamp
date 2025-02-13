@@ -67,7 +67,17 @@ foreach(robot_name IN LISTS VAMP_ROBOT_MODULES)
 endforeach()
 
 if(VAMP_BUILD_JAX)
-  list(APPEND VAMP_EXT_SOURCES "src/impl/vamp/bindings/jax/impl.cc")
+  list(APPEND VAMP_ROBOT_JAX_MODULES
+    panda
+    fetch
+  )
+
+  list(APPEND VAMP_EXT_SOURCES "src/impl/vamp/bindings/jax/jax.cc")
+
+  foreach(robot_name IN LISTS VAMP_ROBOT_JAX_MODULES)
+    list(APPEND VAMP_EXT_SOURCES "src/impl/vamp/bindings/jax/${robot_name}.cc")
+  endforeach()
+
   add_definitions(-DVAMP_BUILD_JAX)
 endif()
 
