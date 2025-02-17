@@ -5,6 +5,7 @@ option(VAMP_FORCE_COLORED_OUTPUT "Always produce ANSI-colored output." ON)
 option(VAMP_FORCE_CLANG "Force the use of Clang." OFF)
 
 option(VAMP_BUILD_JAX "Build JAX Extensions." OFF)
+option(VAMP_USE_OPENMP "Use OpenMP." ON)
 option(XLA_DIR "JAX FFI Directory" "")
 
 option(VAMP_BUILD_OMPL_DEMO "Build VAMP C++ OMPL Integration Demo Script" OFF)
@@ -81,6 +82,10 @@ if(VAMP_BUILD_JAX)
   add_definitions(-DVAMP_BUILD_JAX)
 endif()
 
+if(VAMP_USE_OPENMP)
+  add_definitions(-DVAMP_USE_OPENMP)
+endif()
+
 list(APPEND VAMP_EXT_INCLUDES
   ${NIGH_INCLUDE_DIRS}
   ${PDQSORT_INCLUDE_DIRS}
@@ -103,8 +108,14 @@ endif()
 
 target_link_libraries(_core_ext
   PRIVATE Eigen3::Eigen
-  PRIVATE OpenMP::OpenMP_CXX
 )
+
+
+if(VAMP_USE_OPENMP)
+  target_link_libraries(_core_ext
+    PRIVATE OpenMP::OpenMP_CXX
+  )
+endif()
 
 if($ENV{GITHUB_ACTIONS})
   set(STUB_PREFIX "")

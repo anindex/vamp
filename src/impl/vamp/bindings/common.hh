@@ -741,6 +741,8 @@ namespace vamp::binding
 
                 const Configuration c_s_v(start_config.data(), false);
 
+#ifdef VAMP_USE_OPENMP
+
 #pragma omp parallel firstprivate(                                                                           \
         c_s_v, bl_view, gc_view, num_points, num_layers, batch_size, num_goals, env_v)                       \
     shared(cs_view, cl_view, cg_view) default(none)
@@ -764,10 +766,9 @@ namespace vamp::binding
                             {
                                 for (auto i = 0U; i < num_points; ++i)
                                 {
-                                    const Configuration c_a_v(&bl_view(b, l, i, 0), false);
-
                                     for (auto j = 0U; j < num_points; ++j)
                                     {
+                                        const Configuration c_a_v(&bl_view(b, l, i, 0), false);
                                         const Configuration c_b_v(&bl_view(b, l + 1, j, 0), false);
 
                                         cl_view(b, l, i, j) = validate(c_a_v, c_b_v, env_v);
@@ -782,16 +783,58 @@ namespace vamp::binding
                     {
                         for (auto i = 0U; i < num_points; ++i)
                         {
-                            const Configuration c_a_v(&bl_view(b, num_layers - 1, i, 0), false);
-
                             for (auto g = 0U; g < num_goals; ++g)
                             {
+                                const Configuration c_a_v(&bl_view(b, num_layers - 1, i, 0), false);
                                 const Configuration c_g_v(&gc_view(g, 0), false);
+
                                 cg_view(b, i, g) = validate(c_a_v, c_g_v, env_v);
                             }
                         }
                     }
                 }
+#else
+
+                for (auto b = 0U; b < batch_size; ++b)
+                {
+                    for (auto i = 0U; i < num_points; ++i)
+                    {
+                        const Configuration c_b_v(&bl_view(b, 0, i, 0), false);
+                        cs_view(b, 0, i) = validate(c_s_v, c_b_v, env_v);
+                    }
+                }
+
+                for (auto l = 0U; l < num_layers - 1; ++l)
+                {
+                    for (auto b = 0U; b < batch_size; ++b)
+                    {
+                        for (auto i = 0U; i < num_points; ++i)
+                        {
+                            const Configuration c_a_v(&bl_view(b, l, i, 0), false);
+                            for (auto j = 0U; j < num_points; ++j)
+                            {
+                                const Configuration c_b_v(&bl_view(b, l + 1, j, 0), false);
+
+                                cl_view(b, l, i, j) = validate(c_a_v, c_b_v, env_v);
+                            }
+                        }
+                    }
+                }
+
+                for (auto b = 0U; b < batch_size; ++b)
+                {
+                    for (auto i = 0U; i < num_points; ++i)
+                    {
+                        const Configuration c_a_v(&bl_view(b, num_layers - 1, i, 0), false);
+                        for (auto g = 0U; g < num_goals; ++g)
+                        {
+                            const Configuration c_g_v(&gc_view(g, 0), false);
+
+                            cg_view(b, i, g) = validate(c_a_v, c_g_v, env_v);
+                        }
+                    }
+                }
+#endif
 
                 return std::make_tuple(cs_nd, cl_nd, cg_nd);
             });
